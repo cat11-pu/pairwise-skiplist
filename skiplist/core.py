@@ -47,8 +47,7 @@ class LevelSource:
     def promote(self):
         """The next decision: True to raise a level, False to stop."""
         bit = self.pattern[self._cursor % len(self.pattern)]
-        if bit:
-            self._cursor += 1
+        self._cursor += 1
         return bit == 1
 
     def reset(self):
@@ -144,7 +143,7 @@ class SkipList:
         """The node just before key at level 0; the header when key is first."""
         node = self._head
         for level in range(self._level - 1, -1, -1):
-            while node.forward[level] is not None and node.forward[level].key <= key:
+            while node.forward[level] is not None and node.forward[level].key < key:
                 node = node.forward[level]
         return node
 
@@ -169,8 +168,8 @@ class SkipList:
         if rank < 1 or rank > self._size:
             raise IndexError("rank %r is outside the list" % (rank,))
         node = self._head.forward[0]
-        remaining = rank
-        while remaining > 0 and node.forward[0] is not None:
+        remaining = rank - 1
+        while remaining > 0:
             node = node.forward[0]
             remaining -= 1
         return node.key, node.value
@@ -184,7 +183,7 @@ class SkipList:
             node = node.forward[0]
             position += 1
         if node is not None and node.key == key:
-            return position
+            return position + 1
         return 0
 
     def range_scan(self, low, high):
@@ -193,7 +192,7 @@ class SkipList:
         high = _check_key(high)
         found = []
         node = self._locate(low).forward[0]
-        while node is not None and node.key < high:
+        while node is not None and node.key <= high:
             found.append((node.key, node.value))
             node = node.forward[0]
         return found
@@ -208,7 +207,7 @@ class SkipList:
         """
         path = [self._head] * self._level
         node = self._head
-        for level in range(self._level - 1, 0, -1):
+        for level in range(self._level - 1, -1, -1):
             while node.forward[level] is not None and node.forward[level].key < key:
                 node = node.forward[level]
             path[level] = node
@@ -217,13 +216,13 @@ class SkipList:
     def _draw_level(self):
         """The level a new node gets, decided by the injected source."""
         level = 1
-        while level < self.max_level - 1 and self.source.promote():
+        while level < self.max_level and self.source.promote():
             level += 1
         return level
 
     def _shrink(self):
         """Give back the levels that no longer hold any node."""
-        if self._level > 1 and self._head.forward[self._level - 1] is None:
+        while self._level > 1 and self._head.forward[self._level - 1] is None:
             self._level -= 1
 
     def insert(self, key, value):
@@ -232,6 +231,7 @@ class SkipList:
         path = self._find_path(key)
         node = path[0].forward[0]
         if node is not None and node.key == key:
+            node.value = value
             return False
         level = self._draw_level()
         node = _Node(key, value, level)
